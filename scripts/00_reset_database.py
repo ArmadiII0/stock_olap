@@ -1,3 +1,5 @@
+"""Очищает данные проекта для повторного запуска пайплайна."""
+
 from __future__ import annotations
 
 from pathlib import Path

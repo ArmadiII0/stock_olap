@@ -1,3 +1,5 @@
+"""Создаёт схемы и таблицы PostgreSQL для staging, core, mart и meta."""
+
 from __future__ import annotations
 
 from pathlib import Path

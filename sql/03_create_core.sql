@@ -1,3 +1,5 @@
+-- dimension-таблицы описывают даты, инструменты и портфель, fact-таблицы хранят измеримые события и состояния.
+-- dim_date нужен для агрегаций по календарю: год, квартал, месяц, торговый день.
 CREATE TABLE IF NOT EXISTS core.dim_date (
     date_key            INT PRIMARY KEY,
     full_date           DATE NOT NULL UNIQUE,
@@ -40,6 +42,7 @@ CREATE TABLE IF NOT EXISTS core.dim_portfolio (
     created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- fact_market_daily хранит дневные цены и рассчитанные доходности по каждому инструменту.
 CREATE TABLE IF NOT EXISTS core.fact_market_daily (
     date_key            INT NOT NULL REFERENCES core.dim_date(date_key),
     instrument_key      INT NOT NULL REFERENCES core.dim_instrument(instrument_key),
@@ -59,6 +62,7 @@ CREATE TABLE IF NOT EXISTS core.fact_market_daily (
     PRIMARY KEY (date_key, instrument_key)
 );
 
+-- fact_trades фиксирует сделки модельного портфеля: покупки, продажи, комиссии и причину сделки.
 CREATE TABLE IF NOT EXISTS core.fact_trades (
     trade_id            TEXT PRIMARY KEY,
     trade_date_key      INT NOT NULL REFERENCES core.dim_date(date_key),
@@ -74,6 +78,7 @@ CREATE TABLE IF NOT EXISTS core.fact_trades (
     load_dttm           TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- fact_positions хранит ежедневный снимок открытых позиций и нереализованного PnL.
 CREATE TABLE IF NOT EXISTS core.fact_positions (
     date_key            INT NOT NULL REFERENCES core.dim_date(date_key),
     instrument_key      INT NOT NULL REFERENCES core.dim_instrument(instrument_key),

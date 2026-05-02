@@ -1,3 +1,7 @@
+"""Расчёт учебного модельного портфеля.
+
+Здесь выбираются инструменты, считаются целевые веса, сделки, ежедневные позиции, cash и PnL."""
+
 from __future__ import annotations
 
 import math
@@ -16,6 +20,7 @@ from src.logger import log
 
 @dataclass
 class PortfolioConfig:
+    """Типизированная оболочка над настройками портфеля из config/settings.py."""
     name: str
     strategy_name: str
     initial_capital: float
@@ -27,6 +32,7 @@ class PortfolioConfig:
 
 
 def load_market_from_core(engine: Engine) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Берёт из core-слоя цены, календарь и справочник инструментов."""
     prices_sql = """
     SELECT
         d.full_date AS trade_date,
@@ -55,6 +61,7 @@ def load_market_from_core(engine: Engine) -> tuple[pd.DataFrame, pd.DataFrame, p
 
 
 def get_first_trading_date_on_or_after(prices: pd.DataFrame, requested_date: pd.Timestamp) -> pd.Timestamp:
+    """Находит ближайшую торговую дату, если заданная дата старта пришлась на выходной или праздник."""
     dates = sorted(prices.loc[prices["trade_date"] >= requested_date, "trade_date"].dropna().unique())
     if not dates:
         raise ValueError("Нет торговых дат после даты формирования портфеля.")
@@ -67,11 +74,16 @@ def select_portfolio_instruments(
     top_n: int,
     lookback_days: int,
 ) -> pd.DataFrame:
+    """Отбирает top-N бумаг по доходности, скорректированной на риск."""
+    # Для отбора портфеля используется только история до даты старта.
+    # Это защищает модель от look-ahead bias — использования будущих данных.
     history = prices[prices["trade_date"] <= start_date].copy()
     history = history.sort_values(["ticker", "trade_date"])
     history["daily_return"] = history.groupby("ticker")["adj_close_price"].pct_change()
 
     rows = []
+
+    # Для каждого тикера считаем доходность, годовую волатильность и простой risk-adjusted score.
     for ticker, g in history.groupby("ticker"):
         g = g.dropna(subset=["adj_close_price"]).tail(lookback_days)
         if len(g) < max(60, lookback_days // 2):
@@ -114,6 +126,7 @@ def select_portfolio_instruments(
     if selected.empty:
         raise ValueError("После фильтрации не осталось инструментов для портфеля.")
 
+    # Вес задаётся обратно пропорционально волатильности: менее рискованные бумаги получают больший вес.
     selected["inv_vol"] = 1 / selected["volatility_lookback"]
     selected["target_weight"] = selected["inv_vol"] / selected["inv_vol"].sum()
     return selected.reset_index(drop=True)
@@ -126,6 +139,7 @@ def build_portfolio_frames(
     cfg: PortfolioConfig,
     batch_id: str,
 ) -> dict[str, pd.DataFrame]:
+    """Симулирует покупку, ребалансировку и ежедневную оценку портфеля."""
     prices = prices.copy()
     prices["trade_date"] = pd.to_datetime(prices["trade_date"]).dt.normalize()
     prices["adj_close_price"] = pd.to_numeric(prices["adj_close_price"], errors="coerce")
@@ -156,6 +170,7 @@ def build_portfolio_frames(
     if not trading_dates:
         raise ValueError("Нет торговых дат для построения портфеля.")
 
+    # Pivot-таблица делает цены удобными для симуляции: строки — даты, колонки — тикеры.
     price_pivot = (
         px.pivot_table(index="trade_date", columns="ticker", values="adj_close_price", aggfunc="last")
         .sort_index()
@@ -168,6 +183,7 @@ def build_portfolio_frames(
     rebalance_dates = set(date_df.groupby("month")["trade_date"].min().tolist())
     rebalance_dates.discard(actual_start_date)
 
+    # Состояние портфеля хранится в простых структурах: cash, позиции, средняя цена входа и накопленный PnL.
     cash = float(cfg.initial_capital)
     holdings = {ticker: 0.0 for ticker in selected_tickers}
     avg_cost = {ticker: 0.0 for ticker in selected_tickers}
@@ -195,6 +211,7 @@ def build_portfolio_frames(
         })
 
     def execute_buy(trade_date, ticker, quantity, price, reason):
+        # Покупка уменьшает cash, увеличивает позицию и пересчитывает среднюю цену входа.
         nonlocal cash, total_commission
         if quantity <= 0 or price <= 0:
             return
@@ -219,6 +236,7 @@ def build_portfolio_frames(
         add_trade(trade_date, ticker, "BUY", quantity, price, commission, reason)
 
     def execute_sell(trade_date, ticker, quantity, price, reason):
+        # Продажа увеличивает cash и фиксирует realized PnL относительно средней цены входа.
         nonlocal cash, total_commission
         if quantity <= 0 or price <= 0:
             return
@@ -242,6 +260,7 @@ def build_portfolio_frames(
         invested = sum(holdings[t] * float(prices_today[t]) for t in selected_tickers if not pd.isna(prices_today[t]))
         return cash + invested
 
+    # Первичная покупка распределяет стартовый капитал по целевым весам.
     first_prices = price_pivot.loc[actual_start_date]
     for ticker in selected_tickers:
         price = float(first_prices[ticker])
@@ -252,6 +271,8 @@ def build_portfolio_frames(
     for trade_date in trading_dates:
         trade_date = pd.Timestamp(trade_date).normalize()
 
+        # В начале каждого месяца портфель сравнивается с целевыми весами.
+        # Сделка создаётся только если отклонение больше rebalance_threshold.
         if trade_date in rebalance_dates:
             prices_today = price_pivot.loc[trade_date]
             total_value = portfolio_total_value(trade_date)
@@ -278,6 +299,7 @@ def build_portfolio_frames(
         date_key = int(date_key_map[trade_date])
         realized_total = sum(realized_pnl_by_ticker.values())
 
+        # На каждую торговую дату сохраняется снимок позиций и cash — это будущие fact-таблицы.
         for ticker in selected_tickers:
             qty = holdings[ticker]
             if qty <= 0:
@@ -326,6 +348,7 @@ def build_portfolio_frames(
 
 
 def build_and_load_portfolio(engine: Engine, batch_id: str) -> None:
+    """Создаёт данные портфеля и загружает их в core-таблицы."""
     prices, dim_date, dim_instrument = load_market_from_core(engine)
     raw_cfg = PORTFOLIO_CONFIG
     cfg = PortfolioConfig(

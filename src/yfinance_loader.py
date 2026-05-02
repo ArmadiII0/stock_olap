@@ -1,3 +1,7 @@
+"""Загрузка и нормализация рыночных данных из yfinance.
+
+Главная задача модуля — превратить разные форматы ответа yfinance в единый DataFrame для staging-таблицы."""
+
 from __future__ import annotations
 
 import time
@@ -10,6 +14,7 @@ import yfinance as yf
 
 from src.logger import log
 
+# Резервная классификация секторов нужна, когда yfinance не отдаёт справочную информацию по тикеру.
 FALLBACK_SECTORS = {
     "AAPL": "Technology",
     "MSFT": "Technology",
@@ -36,11 +41,13 @@ FALLBACK_SECTORS = {
 
 
 def chunked(items: list[str], size: int) -> Iterable[list[str]]:
+    """Разбивает список тикеров на пачки, чтобы не отправлять слишком большой запрос в yfinance."""
     for i in range(0, len(items), size):
         yield items[i:i + size]
 
 
 def normalize_date_column(df: pd.DataFrame) -> pd.DataFrame:
+    """Приводит колонку с датой к единому имени trade_date и убирает timezone."""
     df = df.copy()
     if "Date" in df.columns:
         date_col = "Date"
@@ -57,6 +64,7 @@ def normalize_date_column(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def standardize_price_columns(df: pd.DataFrame, ticker: str, batch_id: str) -> pd.DataFrame:
+    """Приводит данные одного тикера к структуре staging.stg_yf_prices."""
     if "Date" not in df.columns and "Datetime" not in df.columns:
         df = df.reset_index()
     df = normalize_date_column(df)
@@ -73,6 +81,7 @@ def standardize_price_columns(df: pd.DataFrame, ticker: str, batch_id: str) -> p
     }
     df = df.rename(columns=rename_map)
 
+    # yfinance может вернуть не все колонки. Ниже недостающие поля добавляются с безопасными значениями.
     required_cols = [
         "open_price", "high_price", "low_price", "close_price",
         "adj_close_price", "volume", "dividends", "stock_splits",
@@ -114,9 +123,11 @@ def download_prices(
     chunk_size: int,
     batch_id: str,
 ) -> pd.DataFrame:
+    """Скачивает котировки по всем тикерам и объединяет их в один DataFrame."""
     log(f"Загрузка котировок из yfinance: {len(tickers)} тикеров, период {start} — {end}")
     frames: list[pd.DataFrame] = []
 
+    # Загрузка идёт пачками, чтобы снизить риск ошибок и ограничений со стороны yfinance.
     for chunk in chunked(tickers, chunk_size):
         log(f"Загрузка пачки: {', '.join(chunk)}")
         try:
@@ -169,6 +180,7 @@ def download_prices(
     if not frames:
         raise RuntimeError("yfinance не вернул данных. Проверьте тикеры, период и доступ к сети.")
 
+    # После загрузки всех пачек данные объединяются и очищаются от дублей по тикеру и дате.
     prices = pd.concat(frames, ignore_index=True)
     prices = prices.sort_values(["ticker", "trade_date"]).drop_duplicates(["ticker", "trade_date"])
     log(f"Загружено строк котировок: {len(prices):,}")
@@ -176,10 +188,12 @@ def download_prices(
 
 
 def fetch_instruments(tickers: list[str], fetch_info: bool) -> pd.DataFrame:
+    """Формирует справочник инструментов для core.dim_instrument."""
     rows = []
     for ticker in tickers:
         ticker = ticker.upper().strip()
         info = {}
+        # fetch_info отключён по умолчанию, потому что запросы .info медленнее и чаще упираются в лимиты.
         if fetch_info:
             try:
                 info = yf.Ticker(ticker).info or {}

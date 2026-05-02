@@ -1,3 +1,5 @@
+"""Запускает весь пайплайн проекта по шагам: от создания БД до построения графиков."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -6,6 +8,7 @@ import sys
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
+# Порядок важен: каждый следующий шаг зависит от результата предыдущего.
 SCRIPTS = [
     "00_create_database.py",
     "01_init_database.py",
@@ -19,6 +22,7 @@ SCRIPTS = [
 
 
 def main() -> None:
+    """Последовательно запускает каждый этап проекта отдельным Python-процессом."""
     for script in SCRIPTS:
         script_path = PROJECT_ROOT / "scripts" / script
         print()
@@ -26,6 +30,7 @@ def main() -> None:
         print(f"RUNNING: {script}")
         print("=" * 80)
 
+        # Каждый этап запускается отдельным процессом. Так поведение такое же, как при ручном запуске из README.
         result = subprocess.run(
             [sys.executable, str(script_path)],
             cwd=str(PROJECT_ROOT),

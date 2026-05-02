@@ -1,3 +1,5 @@
+"""Печатает количество строк в основных таблицах и витринах проекта."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -12,6 +14,7 @@ from sqlalchemy import text
 from src.db import get_project_engine
 
 
+# Эти таблицы и витрины показывают, прошли ли этапы пайплайна и сколько данных получилось.
 TABLES = [
     "staging.stg_yf_prices",
     "core.dim_date",
@@ -31,6 +34,7 @@ TABLES = [
 
 
 def main() -> None:
+    """Точка входа для запуска этого этапа пайплайна."""
     engine = get_project_engine()
 
     print()

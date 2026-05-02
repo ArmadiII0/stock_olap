@@ -1,9 +1,12 @@
+-- Mart-слой содержит materialized views — готовые аналитические срезы для отчётов и графиков.
+-- При повторном создании старые витрины удаляются, чтобы структура была полностью пересобрана.
 DROP MATERIALIZED VIEW IF EXISTS mart.mart_aggregates_monthly;
 DROP MATERIALIZED VIEW IF EXISTS mart.mart_risk_metrics;
 DROP MATERIALIZED VIEW IF EXISTS mart.mart_portfolio_structure;
 DROP MATERIALIZED VIEW IF EXISTS mart.mart_portfolio_daily;
 DROP MATERIALIZED VIEW IF EXISTS mart.mart_instrument_returns;
 
+-- Доходность и риск по каждому инструменту во времени.
 CREATE MATERIALIZED VIEW mart.mart_instrument_returns AS
 SELECT
     d.full_date AS trade_date,
@@ -48,6 +51,7 @@ WHERE f.daily_return IS NOT NULL;
 CREATE INDEX idx_mart_instrument_returns_ticker_date
     ON mart.mart_instrument_returns(ticker, trade_date);
 
+-- Ежедневная стоимость портфеля, доходность, просадка и волатильность.
 CREATE MATERIALIZED VIEW mart.mart_portfolio_daily AS
 WITH position_values AS (
     SELECT
@@ -120,6 +124,7 @@ FROM returns;
 CREATE INDEX idx_mart_portfolio_daily_name_date
     ON mart.mart_portfolio_daily(portfolio_name, trade_date);
 
+-- Текущая структура портфеля: тикеры, веса, рыночная стоимость и PnL.
 CREATE MATERIALIZED VIEW mart.mart_portfolio_structure AS
 SELECT
     d.full_date AS trade_date,
@@ -143,6 +148,7 @@ LEFT JOIN core.dim_sector s ON i.sector_key = s.sector_key;
 CREATE INDEX idx_mart_portfolio_structure_name_date
     ON mart.mart_portfolio_structure(portfolio_name, trade_date);
 
+-- Единая витрина риск-метрик для инструментов и портфеля.
 CREATE MATERIALIZED VIEW mart.mart_risk_metrics AS
 WITH instrument_metrics AS (
     SELECT
@@ -225,6 +231,7 @@ FROM portfolio_metrics;
 CREATE INDEX idx_mart_risk_metrics_date_type
     ON mart.mart_risk_metrics(calc_date, object_type);
 
+-- Месячные агрегаты для анализа по секторам, инструментам и портфелю.
 CREATE MATERIALIZED VIEW mart.mart_aggregates_monthly AS
 SELECT
     d.year,
@@ -257,6 +264,7 @@ GROUP BY
 CREATE INDEX idx_mart_aggregates_monthly_period
     ON mart.mart_aggregates_monthly(period_start, sector_name, ticker);
 
+-- Процедура обновляет все materialized views без полного пересоздания SQL-структуры.
 CREATE OR REPLACE PROCEDURE mart.refresh_all_marts()
 LANGUAGE plpgsql
 AS $$

@@ -1,3 +1,5 @@
+"""Загружает котировки из yfinance в staging-слой и фиксирует статус загрузки в meta.load_log."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -18,9 +20,11 @@ from src.yfinance_loader import download_prices
 
 def main() -> None:
     engine = get_project_engine()
+    # batch_id связывает строки котировок и запись в meta.load_log в одну загрузочную сессию.
     batch_id = datetime.now().strftime("%Y%m%d%H%M%S")
 
     try:
+        # Сначала помечаем загрузку как RUNNING, потом обновляем статус на SUCCESS или FAILED.
         with engine.begin() as conn:
             conn.execute(text("""
                 INSERT INTO meta.load_log (

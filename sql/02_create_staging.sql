@@ -1,3 +1,4 @@
+-- meta.load_log хранит историю запусков загрузки: batch_id, статус, количество строк и текст ошибки.
 CREATE TABLE IF NOT EXISTS meta.load_log (
     batch_id            TEXT PRIMARY KEY,
     source_system       TEXT,
@@ -9,6 +10,8 @@ CREATE TABLE IF NOT EXISTS meta.load_log (
     error_message       TEXT
 );
 
+
+-- staging.stg_yf_prices — копия котировок из yfinance в едином формате, без сложной бизнес-логики.
 CREATE TABLE IF NOT EXISTS staging.stg_yf_prices (
     ticker              TEXT NOT NULL,
     trade_date          DATE NOT NULL,
@@ -25,5 +28,7 @@ CREATE TABLE IF NOT EXISTS staging.stg_yf_prices (
     load_dttm           TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+
+-- Индекс ускоряет выборки по тикеру и дате при построении core-слоя.
 CREATE INDEX IF NOT EXISTS idx_stg_yf_prices_ticker_date
     ON staging.stg_yf_prices(ticker, trade_date);

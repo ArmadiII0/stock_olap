@@ -1,3 +1,5 @@
+"""Создаёт материализованные витрины для анализа и графиков."""
+
 from __future__ import annotations
 
 from pathlib import Path

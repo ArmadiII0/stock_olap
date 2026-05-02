@@ -1,4 +1,4 @@
-# Stock OLAP
+# Stock OLAP 
 
 Учебный проект аналитического хранилища фондового рынка:
 
@@ -147,3 +147,8 @@ python scripts/05_build_marts.py
 python scripts/06_check_dataset_volume.py
 python scripts/07_make_charts.py
 ```
+
+
+## 9. Комментарии к коду
+
+В этой версии комментарии добавлены к ключевым блокам кода, а не к каждой строке. Быстрый обзор файлов см. в `PROJECT_GUIDE_RU.md`.

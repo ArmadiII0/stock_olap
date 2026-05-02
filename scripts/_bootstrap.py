@@ -1,3 +1,5 @@
+"""Вспомогательная настройка пути импорта при запуске скриптов из папки scripts."""
+
 from pathlib import Path
 import sys
 

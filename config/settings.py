@@ -1,13 +1,20 @@
+"""Центральные настройки проекта.
+
+Здесь меняются подключение к PostgreSQL, период загрузки котировок, список тикеров и параметры модельного портфеля."""
+
 from __future__ import annotations
 
 import os
 from pathlib import Path
 from dotenv import load_dotenv
 
+# BASE_DIR указывает на корень проекта. От него строятся пути к SQL-файлам и отчётам.
 BASE_DIR = Path(__file__).resolve().parents[1]
+
+# .env хранит локальные параметры подключения. Значения ниже имеют безопасные дефолты для учебного запуска.
 load_dotenv(BASE_DIR / ".env")
 
-POSTGRES_USER = os.getenv("POSTGRES_USER", "ratibot")
+POSTGRES_USER = os.getenv("POSTGRES_USER", "ratibor")
 POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "ratibor")
 POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")
 POSTGRES_PORT = os.getenv("POSTGRES_PORT", "5432")
@@ -24,9 +31,11 @@ ADMIN_DB_URL = (
     f"@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_ADMIN_DB}"
 )
 
+# Период, за который yfinance будет скачивать исторические дневные котировки.
 START_DATE = "2020-01-01"
 END_DATE = "2026-01-01"
 
+# Список инструментов для загрузки. Чтобы расширить датасет, добавьте тикеры сюда.
 TICKERS = [
     "AAPL", "MSFT", "NVDA", "GOOGL", "AMZN",
     "META", "TSLA", "JPM", "V", "MA",
@@ -37,6 +46,7 @@ TICKERS = [
 YFINANCE_CHUNK_SIZE = 8
 FETCH_INSTRUMENT_INFO = False
 
+# Параметры модельного портфеля: стартовый капитал, дата старта, число бумаг и логика ребалансировки.
 PORTFOLIO_CONFIG = {
     "portfolio_name": "Model Risk Adjusted Portfolio",
     "strategy_name": "Top-N risk-adjusted return with inverse volatility weights",
@@ -48,6 +58,7 @@ PORTFOLIO_CONFIG = {
     "commission_rate": 0.001,
 }
 
+# Папки, куда проект складывает SQL-скрипты и сгенерированные графики.
 REPORTS_DIR = BASE_DIR / "reports"
 CHARTS_DIR = REPORTS_DIR / "charts"
 SQL_DIR = BASE_DIR / "sql"

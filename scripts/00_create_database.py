@@ -1,3 +1,5 @@
+"""Создаёт рабочую базу PostgreSQL, если она ещё не создана."""
+
 from __future__ import annotations
 
 from pathlib import Path

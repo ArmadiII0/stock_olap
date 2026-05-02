@@ -1,3 +1,5 @@
+"""Строит PNG-графики по готовым OLAP-витринам."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -10,6 +12,7 @@ if str(PROJECT_ROOT) not in sys.path:
 import matplotlib.pyplot as plt
 import pandas as pd
 
+# Графики строятся уже не из raw/core-таблиц, а из готовых OLAP-витрин mart.
 from config.settings import CHARTS_DIR
 from src.db import get_project_engine, read_sql
 from src.logger import log
@@ -20,6 +23,7 @@ def ensure_chart_dir() -> None:
 
 
 def save_portfolio_value_chart(engine) -> None:
+    """Строит график стоимости портфеля во времени."""
     sql = """
     SELECT
         trade_date,
@@ -30,6 +34,7 @@ def save_portfolio_value_chart(engine) -> None:
     """
     df = read_sql(engine, sql)
 
+    # Каждый график сначала проверяет наличие данных, чтобы скрипт не падал на пустой витрине.
     if df.empty:
         log("Нет данных для графика стоимости портфеля")
         return
@@ -51,6 +56,7 @@ def save_portfolio_value_chart(engine) -> None:
 
 
 def save_portfolio_cumulative_return_chart(engine) -> None:
+    """Строит график накопленной доходности портфеля."""
     sql = """
     SELECT
         trade_date,
@@ -82,6 +88,7 @@ def save_portfolio_cumulative_return_chart(engine) -> None:
 
 
 def save_portfolio_drawdown_chart(engine) -> None:
+    """Показывает просадку портфеля относительно исторического максимума."""
     sql = """
     SELECT
         trade_date,
@@ -113,6 +120,7 @@ def save_portfolio_drawdown_chart(engine) -> None:
 
 
 def save_top_instrument_returns_chart(engine) -> None:
+    """Показывает самые доходные инструменты на последнюю доступную дату."""
     sql = """
     WITH last_date AS (
         SELECT MAX(trade_date) AS max_trade_date
@@ -150,6 +158,7 @@ def save_top_instrument_returns_chart(engine) -> None:
 
 
 def save_risk_return_scatter_chart(engine) -> None:
+    """Строит карту риск-доходность по инструментам и портфелю."""
     sql = """
     WITH last_date AS (
         SELECT MAX(calc_date) AS max_calc_date
@@ -197,6 +206,7 @@ def save_risk_return_scatter_chart(engine) -> None:
 
 
 def save_portfolio_structure_chart(engine) -> None:
+    """Показывает текущие веса инструментов в портфеле."""
     sql = """
     WITH last_date AS (
         SELECT MAX(trade_date) AS max_trade_date
@@ -232,6 +242,7 @@ def save_portfolio_structure_chart(engine) -> None:
 
 
 def save_monthly_sector_returns_chart(engine) -> None:
+    """Строит динамику средней дневной доходности по секторам за каждый месяц."""
     sql = """
     SELECT
         period_start,
@@ -275,6 +286,7 @@ def save_monthly_sector_returns_chart(engine) -> None:
 
 
 def main() -> None:
+    """Запускает построение всех графиков."""
     log("Построение графиков")
     ensure_chart_dir()
     engine = get_project_engine()

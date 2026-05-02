@@ -1,3 +1,7 @@
+"""Построение core-слоя хранилища.
+
+Модуль берёт сырые котировки из staging, формирует измерения и факт дневных рыночных показателей."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -11,6 +15,7 @@ from src.yfinance_loader import fetch_instruments
 
 
 def load_staging_prices(engine: Engine) -> pd.DataFrame:
+    """Читает котировки из staging-таблицы и проверяет, что данные уже загружены."""
     sql = """
     SELECT
         ticker,
@@ -36,9 +41,12 @@ def load_staging_prices(engine: Engine) -> pd.DataFrame:
 
 
 def build_core_frames(prices: pd.DataFrame, instruments_raw: pd.DataFrame) -> dict[str, pd.DataFrame]:
+    """На базе staging-данных собирает DataFrame для core-таблиц: измерения и факт."""
     prices = prices.copy()
     prices["trade_date"] = pd.to_datetime(prices["trade_date"]).dt.normalize()
 
+    # Календарное измерение строится по всему диапазону дат, а не только по торговым дням.
+    # Это удобно для OLAP-аналитики по месяцам, кварталам и годам.
     min_date = prices["trade_date"].min()
     max_date = prices["trade_date"].max()
     all_dates = pd.date_range(min_date, max_date, freq="D")
@@ -65,6 +73,8 @@ def build_core_frames(prices: pd.DataFrame, instruments_raw: pd.DataFrame) -> di
         ]
     ]
 
+    # Секторы и инструменты выносятся в отдельные dimension-таблицы,
+    # чтобы факт рынка ссылался на них по ключам, а не хранил текстовые поля повторно.
     sectors = sorted(instruments_raw["sector_name"].fillna("Unknown").unique().tolist())
     dim_sector = pd.DataFrame({"sector_name": sectors})
     dim_sector.insert(0, "sector_key", range(1, len(dim_sector) + 1))
@@ -85,6 +95,8 @@ def build_core_frames(prices: pd.DataFrame, instruments_raw: pd.DataFrame) -> di
     date_map = dim_date[["date_key", "full_date"]].rename(columns={"full_date": "trade_date"})
     instr_map = dim_instrument[["instrument_key", "ticker"]]
 
+    # Факт дневного рынка связывает цену конкретного инструмента с конкретной датой.
+    # После merge появляются surrogate keys date_key и instrument_key.
     fact_market = prices.merge(date_map, on="trade_date", how="left")
     fact_market = fact_market.merge(instr_map, on="ticker", how="left")
     fact_market = fact_market.sort_values(["instrument_key", "trade_date"])
@@ -93,6 +105,7 @@ def build_core_frames(prices: pd.DataFrame, instruments_raw: pd.DataFrame) -> di
         fact_market[col] = pd.to_numeric(fact_market[col], errors="coerce")
     fact_market["volume"] = pd.to_numeric(fact_market["volume"], errors="coerce").fillna(0).astype("int64")
 
+    # Основные аналитические показатели считаются здесь, чтобы витрины mart могли использовать уже готовый факт.
     fact_market["daily_return"] = fact_market.groupby("instrument_key")["adj_close_price"].pct_change()
     shifted_price = fact_market.groupby("instrument_key")["adj_close_price"].shift(1)
     ratio = fact_market["adj_close_price"] / shifted_price
@@ -122,6 +135,7 @@ def build_core_frames(prices: pd.DataFrame, instruments_raw: pd.DataFrame) -> di
 
 
 def build_and_load_core_market(engine: Engine) -> None:
+    """Оркестрирует построение core-слоя и записывает результат в PostgreSQL."""
     log("Чтение staging.stg_yf_prices")
     prices = load_staging_prices(engine)
 

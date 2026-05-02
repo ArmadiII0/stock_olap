@@ -1,3 +1,5 @@
+"""Строит модельный портфель на основании данных core-слоя."""
+
 from __future__ import annotations
 
 from datetime import datetime
